@@ -5,11 +5,11 @@ from collections import Counter
 
 INPUT_FILE = "comentarios_limpios.csv"
 SEP = ";"
-TOKENS_COLUMN = "tokens_no_stop_str"  # lemas sin stopwords separados por espacios
+TOKENS_COLUMN = "tokens_no_stop_str"  # space-separated lemmas without stopwords
 OUTPUT_FILE = "coocurrencias.csv"
 
-# Palabras clave teóricamente motivadas — interesa cómo co-ocurren con otros
-# términos en el discurso sobre universidad pública vs. privada.
+# Theoretically motivated keywords — I'm interested in how these terms
+# co-occur with others in discourse about public vs. private university.
 KEYWORDS = [
     "universidad",
     "carrera",
@@ -26,35 +26,35 @@ TOP_N = 20
 
 
 def cargar_datos():
-    """Lee el CSV preprocesado y devuelve un DataFrame."""
-    print(f"Leyendo: {INPUT_FILE}")
+    """Reads the preprocessed CSV and returns a DataFrame."""
+    print(f"Reading: {INPUT_FILE}")
     df = pd.read_csv(INPUT_FILE, sep=SEP)
 
     if TOKENS_COLUMN not in df.columns:
         raise ValueError(
-            f"La columna '{TOKENS_COLUMN}' no existe. Columnas disponibles: {list(df.columns)}"
+            f"Column '{TOKENS_COLUMN}' not found. Available: {list(df.columns)}"
         )
 
-    # Rellenamos NaN para que .split() no falle
+    # Fill NaN so .split() doesn't break
     df[TOKENS_COLUMN] = df[TOKENS_COLUMN].fillna("")
 
-    print(f"Filas cargadas: {len(df)}")
+    print(f"Rows loaded: {len(df)}")
     return df
 
 
 def construir_coocurrencias(df, keywords):
     """
-    Construye los conteos de co-ocurrencias para cada palabra clave.
+    Builds co-occurrence counts for each keyword.
 
-    Lógica: por cada comentario, si aparece la keyword, se cuenta cada
-    otro token del mismo comentario como co-ocurrencia. Se usa un set
-    para búsquedas O(1) por keyword.
+    Logic: for each comment, if a keyword appears in it, I count every
+    other token in that comment as a co-occurrence. I use a set for O(1)
+    keyword lookups per comment.
 
-    Devuelve un DataFrame con columnas: keyword, token, cooc_freq, cooc_rel.
+    Returns a DataFrame with columns: keyword, token, cooc_freq, cooc_rel.
     """
     cooc_dict = {kw: Counter() for kw in keywords}
 
-    print("Calculando co-ocurrencias...")
+    print("Calculating co-occurrences...")
 
     for tokens_str in df[TOKENS_COLUMN]:
         tokens = str(tokens_str).split()
@@ -71,7 +71,7 @@ def construir_coocurrencias(df, keywords):
                         continue
                     cooc_dict[kw][tok] += 1
 
-    print("Construyendo DataFrame...")
+    print("Building DataFrame...")
 
     rows = []
     for kw, counter in cooc_dict.items():
@@ -96,19 +96,19 @@ def construir_coocurrencias(df, keywords):
 
 
 def guardar_resultados(cooc_df):
-    """Guarda el DataFrame de co-ocurrencias en un CSV."""
-    print(f"Guardando en: {OUTPUT_FILE}")
+    """Saves the co-occurrence DataFrame to CSV."""
+    print(f"Saving to: {OUTPUT_FILE}")
     cooc_df.to_csv(OUTPUT_FILE, index=False, sep=";", encoding="utf-8")
-    print("Guardado.")
+    print("Saved.")
 
 
 def mostrar_top_por_keyword(cooc_df, keywords, n=TOP_N):
-    """Muestra por pantalla los n tokens más frecuentes por keyword."""
+    """Prints the top n co-occurring tokens per keyword."""
     for kw in keywords:
         print(f"\n=== '{kw}' ===")
         sub = cooc_df[cooc_df["keyword"] == kw].head(n)
         if sub.empty:
-            print("  (sin co-ocurrencias)")
+            print("  (no co-occurrences)")
             continue
 
         for i, row in sub.iterrows():

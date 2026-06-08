@@ -7,12 +7,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Clave de API desde .env — obtener en https://console.cloud.google.com/
+# Load the API key from .env — get one at https://console.cloud.google.com/
 API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-# Videos seleccionados para el corpus. Criterio: solo influencers de derecha española,
-# sin clips de TV ni contenido descontextualizado. Estrategia de búsqueda: cuenta anónima
-# (para evitar sesgo algorítmico), palabras clave: "universidad progre", "universidad woke",
+# Videos I selected for the corpus. Criteria: Spanish right-wing influencers only,
+# no TV clips or decontextualized content. Search strategy: anonymous account
+# (to avoid algorithmic bias), keywords: "universidad progre", "universidad woke",
 # "universidad privada".
 VIDEO_IDS = [
     "2qyTVETSOKE", # Rodri Salas https://www.youtube.com/watch?v=2qyTVETSOKE
@@ -39,8 +39,8 @@ youtube = build("youtube", "v3", developerKey=API_KEY)
 
 def descargar_comentarios_y_replies(video_id: str):
     """
-    Descarga comentarios principales y sus respuestas para un video.
-    Devuelve una tupla: (lista de dicts, estado_descarga).
+    Downloads top-level comments and replies for a given video.
+    Returns a tuple: (list of dicts, download_status).
     """
     comentarios = []
     token_siguiente = None
@@ -59,7 +59,7 @@ def descargar_comentarios_y_replies(video_id: str):
 
         while True:
             for item in respuesta["items"]:
-                # Comentario principal
+                # Top-level comment
                 top_comment = item["snippet"]["topLevelComment"]
                 top_snippet = top_comment["snippet"]
                 top_id = top_comment["id"]
@@ -77,7 +77,7 @@ def descargar_comentarios_y_replies(video_id: str):
                     "estado_video": estado_descarga,
                 })
 
-                # Respuestas
+                # Replies
                 replies = item.get("replies", {}).get("comments", [])
                 for reply in replies:
                     r_snippet = reply["snippet"]
@@ -110,18 +110,18 @@ def descargar_comentarios_y_replies(video_id: str):
 
     except HttpError as e:
         estado_descarga = f"ERROR_API_{e.resp.status}"
-        print(f"  -> {estado_descarga}: {video_id}. Detalle: {e.content.decode()}")
+        print(f"  -> {estado_descarga}: {video_id}. Detail: {e.content.decode()}")
 
     except Exception as e:
         estado_descarga = "ERROR_OTRO"
-        print(f"  -> {estado_descarga}: error inesperado en {video_id}. Detalle: {e}")
+        print(f"  -> {estado_descarga}: unexpected error on {video_id}. Detail: {e}")
 
-    # Devolver lo recolectado antes del fallo (si hay) y el estado final
+    # Return whatever was collected before the failure (if any) and the final status
     return comentarios, estado_descarga
 
 
 def guardar_csv(datos, archivo):
-    """Guarda la lista de dicts en un CSV delimitado por punto y coma."""
+    """Saves the list of dicts to a semicolon-delimited CSV."""
     with open(archivo, "w", newline="", encoding="utf-8") as f:
         campos = [
             "video_id",
@@ -151,15 +151,15 @@ if __name__ == "__main__":
     resultados_globales = []
 
     for vid in VIDEO_IDS:
-        print(f"Descargando comentarios y respuestas para {vid}...")
+        print(f"Downloading comments + replies for {vid}...")
         comentarios, estado = descargar_comentarios_y_replies(vid)
-        print(f"  -> {len(comentarios)} filas procesadas. Estado: {estado}")
+        print(f"  -> {len(comentarios)} rows processed. Status: {estado}")
 
         if estado != "EXITO" and not comentarios:
             todos_los_comentarios.append({
                 "video_id": vid,
                 "comment_id": "", "parent_id": "", "is_reply": "",
-                "autor": "", "texto": f"DESCARGA FALLIDA - {estado}",
+                "autor": "", "texto": f"DOWNLOAD FAILED - {estado}",
                 "likes": 0, "fecha": "",
                 "fecha_descarga": FECHA_DESCARGA,
                 "estado_video": estado,
@@ -167,7 +167,7 @@ if __name__ == "__main__":
         else:
             todos_los_comentarios.extend(comentarios)
 
-    print(f"\n--- Resumen de la ejecución ---")
-    print(f"Total de filas (todos los videos): {len(todos_los_comentarios)}")
+    print(f"\n--- Execution summary ---")
+    print(f"Total rows (all videos): {len(todos_los_comentarios)}")
     guardar_csv(todos_los_comentarios, OUTPUT_FILE)
-    print(f"Guardado en {OUTPUT_FILE}")
+    print(f"Saved to {OUTPUT_FILE}")

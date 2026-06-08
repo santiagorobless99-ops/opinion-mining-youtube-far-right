@@ -1,10 +1,10 @@
 """
-Preprocesamiento para embeddings.
+Preprocessing for embeddings.
 
-Toma como entrada el CSV del scraping (mínimo: video_id, comment_id,
+Takes the raw scraping CSV as input (at minimum: video_id, comment_id,
 parent_id, is_reply, autor, texto, likes, fecha, fecha_descarga, estado_video).
 
-Salida: mismos metadatos + columna 'texto_clean' lista para modelos de embeddings.
+Output: same metadata + a 'texto_clean' column ready for sentence embedding models.
 """
 
 import pandas as pd
@@ -19,11 +19,11 @@ OUTPUT_FILE = "comentarios_para_embeddings.csv"
 TEXT_COL = "texto"
 STATUS_COL = "estado_video"
 
-# Filtros de calidad para el texto a embeddear
+# Quality filters for the text I'll embed
 MIN_CHAR_LEN = 10
 MIN_WORDS = 2
 
-# Filtrar solo español; cambiar a False si el corpus es multilingüe
+# I filter to Spanish only; set to False if running on a multilingual corpus
 USAR_FILTRO_IDIOMA = True
 IDIOMA_OBJETIVO = "es"
 
@@ -31,8 +31,8 @@ IDIOMA_OBJETIVO = "es"
 # === FUNCTIONS ===
 
 def cargar_datos():
-    """Lee el CSV original y devuelve un DataFrame."""
-    print(f"Leyendo: {INPUT_FILE}")
+    """Reads the raw CSV and returns a DataFrame."""
+    print(f"Reading: {INPUT_FILE}")
     df = pd.read_csv(
         INPUT_FILE,
         sep=";",
@@ -41,20 +41,20 @@ def cargar_datos():
     )
 
     if TEXT_COL not in df.columns:
-        raise ValueError(f"Columna de texto '{TEXT_COL}' no encontrada. Disponibles: {list(df.columns)}")
+        raise ValueError(f"Text column '{TEXT_COL}' not found. Available: {list(df.columns)}")
 
     if STATUS_COL not in df.columns:
-        raise ValueError(f"Columna de estado '{STATUS_COL}' no encontrada. Disponibles: {list(df.columns)}")
+        raise ValueError(f"Status column '{STATUS_COL}' not found. Available: {list(df.columns)}")
 
-    print(f"Filas cargadas: {len(df)}")
+    print(f"Rows loaded: {len(df)}")
     return df
 
 
 def limpiar_texto_para_embeddings(texto):
     """
-    Limpieza mínima para embeddings.
-    Se eliminan URLs, marcas de tiempo y se normaliza el espacio, pero se conservan
-    puntuación y emojis porque aportan información semántica al modelo.
+    Minimal cleaning for embeddings.
+    I remove URLs, timestamps, and normalize whitespace, but I keep
+    punctuation and emojis — they carry semantic information for the model.
     """
     if not isinstance(texto, str):
         texto = str(texto)
@@ -71,8 +71,8 @@ def limpiar_texto_para_embeddings(texto):
 
 def detectar_idioma_seguro(texto):
     """
-    Detecta el idioma con langdetect.
-    Devuelve 'unknown' para textos cortos o que no se pueden procesar.
+    Detects language with langdetect.
+    Returns 'unknown' on short or unparseable input.
     """
     if not isinstance(texto, str):
         return "unknown"
@@ -87,33 +87,33 @@ def detectar_idioma_seguro(texto):
 
 def aplicar_filtros_de_calidad(df):
     """
-    Aplica filtros de calidad en secuencia:
-    1. Conservar solo filas descargadas con éxito
-    2. Eliminar texto NaN
-    3. Limpiar texto -> 'texto_clean'
-    4. Eliminar textos vacíos tras la limpieza
-    5. Filtrar por longitud mínima (chars y palabras)
-    6. Filtrar por idioma (opcional)
+    Applies quality filters in sequence:
+    1. Keep only successfully downloaded rows
+    2. Drop NaN text
+    3. Clean text -> 'texto_clean'
+    4. Drop empty texts after cleaning
+    5. Filter by minimum length (chars and words)
+    6. Optionally filter by language
     """
-    # 1. Solo descargas exitosas
+    # 1. Keep only successful downloads
     antes = len(df)
     df = df[df[STATUS_COL] == "EXITO"].copy()
-    print(f"Tras filtro de estado: {len(df)} filas (descartadas {antes - len(df)})")
+    print(f"After status filter: {len(df)} rows (dropped {antes - len(df)})")
 
-    # 2. Eliminar NaN
+    # 2. Drop NaN
     df = df.dropna(subset=[TEXT_COL]).reset_index(drop=True)
-    print(f"Tras eliminar NaN: {len(df)} filas")
+    print(f"After dropping NaN: {len(df)} rows")
 
-    # 3. Limpiar
-    print("Limpiando texto para embeddings...")
+    # 3. Clean
+    print("Cleaning text for embeddings...")
     df["texto_clean"] = df[TEXT_COL].apply(limpiar_texto_para_embeddings)
 
-    # 4. Eliminar textos vacíos
+    # 4. Drop empties
     antes = len(df)
     df = df[df["texto_clean"].str.strip() != ""].copy()
-    print(f"Tras eliminar textos vacíos: {len(df)} filas (descartadas {antes - len(df)})")
+    print(f"After dropping empty texts: {len(df)} rows (dropped {antes - len(df)})")
 
-    # 5. Filtros de longitud
+    # 5. Length filters
     df["n_chars"] = df["texto_clean"].str.len()
     df["n_words"] = df["texto_clean"].str.split().apply(len)
 
@@ -122,15 +122,15 @@ def aplicar_filtros_de_calidad(df):
         (df["n_chars"] >= MIN_CHAR_LEN) &
         (df["n_words"] >= MIN_WORDS)
     ].copy()
-    print(f"Tras filtro de longitud: {len(df)} filas (descartadas {antes - len(df)})")
+    print(f"After length filter: {len(df)} rows (dropped {antes - len(df)})")
 
-    # 6. Filtro de idioma
+    # 6. Language filter
     if USAR_FILTRO_IDIOMA:
-        print("Detectando idioma...")
+        print("Detecting language...")
         df["lang"] = df["texto_clean"].apply(detectar_idioma_seguro)
         antes = len(df)
         df = df[df["lang"] == IDIOMA_OBJETIVO].copy().reset_index(drop=True)
-        print(f"Solo español: {len(df)} (descartadas {antes - len(df)})")
+        print(f"Spanish only: {len(df)} (dropped {antes - len(df)})")
     else:
         df["lang"] = "unknown"
 
@@ -139,8 +139,8 @@ def aplicar_filtros_de_calidad(df):
 
 def seleccionar_columnas_salida(df):
     """
-    Selecciona las columnas a conservar: metadatos de trazabilidad + texto limpio.
-    Solo incluye columnas que existan en el DataFrame.
+    Selects the columns to keep: metadata for traceability + cleaned text.
+    I only include columns that actually exist in the DataFrame.
     """
     columnas_basicas = [
         "video_id",
@@ -173,10 +173,10 @@ def main():
     # 3. Select output columns
     df_salida = seleccionar_columnas_salida(df)
 
-    # 4. Guardar
-    print(f"Guardando en: {OUTPUT_FILE}")
+    # 4. Save
+    print(f"Saving to: {OUTPUT_FILE}")
     df_salida.to_csv(OUTPUT_FILE, sep=";", encoding="utf-8", index=False)
-    print("Listo.")
+    print("Done.")
 
 
 if __name__ == "__main__":
