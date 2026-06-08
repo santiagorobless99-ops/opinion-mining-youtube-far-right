@@ -7,50 +7,46 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# === CONFIGURA TU API KEY EN UN ARCHIVO .env ===
-# Crea un archivo .env en esta carpeta con el contenido:
-#   YOUTUBE_API_KEY=tu_clave_aqui
-# Obtén una clave en: https://console.cloud.google.com/
+# Load the API key from .env — get one at https://console.cloud.google.com/
 API_KEY = os.getenv("YOUTUBE_API_KEY")
 
+# Videos I selected for the corpus. Criteria: Spanish right-wing influencers only,
+# no TV clips or decontextualized content. Search strategy: anonymous account
+# (to avoid algorithmic bias), keywords: "universidad progre", "universidad woke",
+# "universidad privada".
 VIDEO_IDS = [
-    "2qyTVETSOKE", # Rodri Salas video https://www.youtube.com/watch?v=2qyTVETSOKE
+    "2qyTVETSOKE", # Rodri Salas https://www.youtube.com/watch?v=2qyTVETSOKE
     "n04uHumiiDU", # Roberto Vaquero short https://www.youtube.com/shorts/n04uHumiiDU
     "OoGYc4KhRWI", # Roberto Vaquero short https://www.youtube.com/shorts/OoGYc4KhRWI
-    "qCB2E_YBgP0",# Roberto Vaquero video https://www.youtube.com/watch?v=qCB2E_YBgP0
-    "eUkDaMirjYU", # Wall St. Wolverine video https://www.youtube.com/watch?v=eUkDaMirjYU
+    "qCB2E_YBgP0", # Roberto Vaquero https://www.youtube.com/watch?v=qCB2E_YBgP0
+    "eUkDaMirjYU", # Wall St. Wolverine https://www.youtube.com/watch?v=eUkDaMirjYU
     "E770DNGYeUA", # Wall St. Wolverine short https://www.youtube.com/shorts/E770DNGYeUA
     "ozhKAomDTjE", # Wall St. Wolverine short https://www.youtube.com/shorts/ozhKAomDTjE
     "bviJ0PnO8EI", # Wall St. Wolverine short https://www.youtube.com/shorts/bviJ0PnO8EI
     "Ed-EJHjxI88", # Wall St. Wolverine short https://www.youtube.com/shorts/Ed-EJHjxI88
     "QVSKDUA9p9s", # Wall St. Wolverine short https://www.youtube.com/shorts/QVSKDUA9p9s
     "2GcQVaqdgEU", # Wall St. Wolverine short https://www.youtube.com/shorts/2GcQVaqdgEU
-    "hnUDs-zXKUs", # Wall St. Wolverine entrevistando a Juan Ramón Rallo video https://www.youtube.com/watch?v=hnUDs-zXKUs 
-    "HkW8QsGeL8A", # Worldcast entrevistando a Juan Ramón Rallo https://www.youtube.com/shorts/HkW8QsGeL8A
-    "2_srTgttqH4", # Juan Ramón Rallo atacando universidad privada video https://www.youtube.com/watch?v=2_srTgttqH4
-    "oNiHsD6uF1Q", # Iker Jiménez video "universidad pública vs privada" https://www.youtube.com/watch?v=oNiHsD6uF1Q
-    # Criterio de selección: sólo vídeos de influencers de derecha españoles, no clips sacados de la tele ni vídeos descontextualizados
-    # Estrategia de búsqueda usada: cuenta de Youtube anónima para no sesgar el algoritmo. Keywords: "universidad progre"...
-    # ... "universidad woke", "universidad privada"
+    "hnUDs-zXKUs", # Wall St. Wolverine interviewing Juan Ramón Rallo https://www.youtube.com/watch?v=hnUDs-zXKUs
+    "HkW8QsGeL8A", # Worldcast interviewing Juan Ramón Rallo https://www.youtube.com/shorts/HkW8QsGeL8A
+    "2_srTgttqH4", # Juan Ramón Rallo on private university https://www.youtube.com/watch?v=2_srTgttqH4
+    "oNiHsD6uF1Q", # Iker Jiménez "universidad pública vs privada" https://www.youtube.com/watch?v=oNiHsD6uF1Q
 ]
 
 OUTPUT_FILE = "comentarios_multivideo_robusto2.csv"
 FECHA_DESCARGA = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-# === CREAR EL CLIENTE DE YOUTUBE ===
 youtube = build("youtube", "v3", developerKey=API_KEY)
 
 def descargar_comentarios_y_replies(video_id: str):
     """
-    Descarga comentarios de nivel superior y replies de un vídeo concreto.
-    Devuelve una tupla: (lista de diccionarios, estado_descarga).
+    Downloads top-level comments and replies for a given video.
+    Returns a tuple: (list of dicts, download_status).
     """
     comentarios = []
     token_siguiente = None
     estado_descarga = "EXITO"
 
     try:
-        # PRIMER INTENTO DE LLAMADA A LA API
         respuesta_inicial = youtube.commentThreads().list(
             part="snippet,replies",
             videoId=video_id,
@@ -59,11 +55,11 @@ def descargar_comentarios_y_replies(video_id: str):
             pageToken=token_siguiente
         ).execute()
 
-        respuesta = respuesta_inicial # Usar la primera respuesta
+        respuesta = respuesta_inicial
 
         while True:
             for item in respuesta["items"]:
-                # ---------- Comentario de nivel superior ----------
+                # Top-level comment
                 top_comment = item["snippet"]["topLevelComment"]
                 top_snippet = top_comment["snippet"]
                 top_id = top_comment["id"]
@@ -77,11 +73,11 @@ def descargar_comentarios_y_replies(video_id: str):
                     "texto": top_snippet.get("textDisplay"),
                     "likes": top_snippet.get("likeCount"),
                     "fecha": top_snippet.get("publishedAt"),
-                    "fecha_descarga": FECHA_DESCARGA, # Nuevo metadato
-                    "estado_video": estado_descarga, # Nuevo metadato
+                    "fecha_descarga": FECHA_DESCARGA,
+                    "estado_video": estado_descarga,
                 })
 
-                # ---------- Replies (respuestas al comentario) ----------
+                # Replies
                 replies = item.get("replies", {}).get("comments", [])
                 for reply in replies:
                     r_snippet = reply["snippet"]
@@ -96,15 +92,14 @@ def descargar_comentarios_y_replies(video_id: str):
                         "texto": r_snippet.get("textDisplay"),
                         "likes": r_snippet.get("likeCount"),
                         "fecha": r_snippet.get("publishedAt"),
-                        "fecha_descarga": FECHA_DESCARGA, # Nuevo metadato
-                        "estado_video": estado_descarga, # Nuevo metadato
+                        "fecha_descarga": FECHA_DESCARGA,
+                        "estado_video": estado_descarga,
                     })
 
             token_siguiente = respuesta.get("nextPageToken")
             if not token_siguiente:
                 break
 
-            # Llamada para la siguiente página
             respuesta = youtube.commentThreads().list(
                 part="snippet,replies",
                 videoId=video_id,
@@ -114,23 +109,19 @@ def descargar_comentarios_y_replies(video_id: str):
             ).execute()
 
     except HttpError as e:
-        # Manejo de errores específicos de la API (404, 403, etc.)
         estado_descarga = f"ERROR_API_{e.resp.status}"
-        print(f"  -> {estado_descarga}: Error al procesar {video_id}. Detalle: {e.content.decode()}")
+        print(f"  -> {estado_descarga}: {video_id}. Detail: {e.content.decode()}")
 
     except Exception as e:
-        # Manejo de otros errores no relacionados directamente con la API
-        estado_descarga = f"ERROR_OTRO"
-        print(f"  -> {estado_descarga}: Error inesperado en {video_id}. Detalle: {e}")
+        estado_descarga = "ERROR_OTRO"
+        print(f"  -> {estado_descarga}: unexpected error on {video_id}. Detail: {e}")
 
-    # Devolver comentarios recogidos hasta el fallo (si los hay) y el estado final
+    # Return whatever was collected before the failure (if any) and the final status
     return comentarios, estado_descarga
 
 
 def guardar_csv(datos, archivo):
-    """
-    Guarda la lista de diccionarios en un CSV con separador ';'.
-    """
+    """Saves the list of dicts to a semicolon-delimited CSV."""
     with open(archivo, "w", newline="", encoding="utf-8") as f:
         campos = [
             "video_id",
@@ -141,8 +132,8 @@ def guardar_csv(datos, archivo):
             "texto",
             "likes",
             "fecha",
-            "fecha_descarga", # Nuevo campo
-            "estado_video",   # Nuevo campo
+            "fecha_descarga",
+            "estado_video",
         ]
         escritor = csv.DictWriter(
             f,
@@ -152,8 +143,6 @@ def guardar_csv(datos, archivo):
         )
         escritor.writeheader()
         for fila in datos:
-            # Asegurarse de que el campo "texto" se maneje correctamente
-            # para evitar problemas con comillas y delimitadores.
             fila['texto'] = fila['texto'].replace('\n', ' ').replace('\r', ' ')
             escritor.writerow(fila)
 
@@ -162,16 +151,15 @@ if __name__ == "__main__":
     resultados_globales = []
 
     for vid in VIDEO_IDS:
-        print(f"Descargando comentarios + replies de {vid}...")
+        print(f"Downloading comments + replies for {vid}...")
         comentarios, estado = descargar_comentarios_y_replies(vid)
-        print(f"  -> {len(comentarios)} líneas procesadas. Estado: {estado}")
+        print(f"  -> {len(comentarios)} rows processed. Status: {estado}")
 
-        # Si hay un error, se añade una línea de metadato de error (si no hay comentarios)
         if estado != "EXITO" and not comentarios:
             todos_los_comentarios.append({
                 "video_id": vid,
                 "comment_id": "", "parent_id": "", "is_reply": "",
-                "autor": "", "texto": f"NO SE PUDO DESCARGAR - {estado}",
+                "autor": "", "texto": f"DOWNLOAD FAILED - {estado}",
                 "likes": 0, "fecha": "",
                 "fecha_descarga": FECHA_DESCARGA,
                 "estado_video": estado,
@@ -179,7 +167,7 @@ if __name__ == "__main__":
         else:
             todos_los_comentarios.extend(comentarios)
 
-    print(f"\n--- Resumen de la Ejecución ---")
-    print(f"Total líneas finales (todos los vídeos): {len(todos_los_comentarios)}")
+    print(f"\n--- Execution summary ---")
+    print(f"Total rows (all videos): {len(todos_los_comentarios)}")
     guardar_csv(todos_los_comentarios, OUTPUT_FILE)
-    print(f"Guardado en {OUTPUT_FILE}")
+    print(f"Saved to {OUTPUT_FILE}")

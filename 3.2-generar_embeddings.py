@@ -1,96 +1,86 @@
 """
-Generación de embeddings para comentarios de YouTube.
+Generates sentence embeddings for the YouTube comment corpus.
 
-Entrada:
-    - comentarios_para_embeddings.csv
-        (debe contener al menos la columna 'texto_clean')
-
-Salida:
-    - embeddings.npy
-        -> matriz NumPy (n_comentarios x dim_embedding)
-    - comentarios_index.csv
-        -> CSV con índices y metadatos para mapear cada fila de embeddings
+Input:  comentarios_para_embeddings.csv  (needs at least a 'texto_clean' column)
+Output:
+    embeddings.npy              — NumPy matrix (n_comments x embedding_dim)
+    comentarios_index_embeddings.csv  — metadata aligned to each row of the matrix
 """
 
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-# ========== CONFIGURACIÓN BÁSICA ==========
+# === CONFIG ===
 
-INPUT_FILE = "comentarios_para_embeddings.csv"      # CSV preprocesado
-TEXT_COLUMN = "texto_clean"                         # columna que usaremos para embedding
+INPUT_FILE = "comentarios_para_embeddings.csv"
+TEXT_COLUMN = "texto_clean"
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
-OUTPUT_EMBEDDINGS = "embeddings.npy"               # matriz de embeddings
-OUTPUT_INDEX = "comentarios_index_embeddings.csv"             # metadatos + índice
+OUTPUT_EMBEDDINGS = "embeddings.npy"
+OUTPUT_INDEX = "comentarios_index_embeddings.csv"
 
 
 def cargar_corpus(path: str, text_col: str) -> pd.DataFrame:
     """
-    Carga el CSV y comprueba que la columna de texto existe.
-    Devuelve un DataFrame con un índice limpio (0..n-1).
+    Loads the CSV and checks the text column exists.
+    Returns a clean DataFrame with a 0-based index.
     """
-    print(f"Leyendo corpus desde: {path}")
+    print(f"Reading corpus from: {path}")
     df = pd.read_csv(path, sep=";", encoding="utf-8", engine="python")
 
     if text_col not in df.columns:
-        raise ValueError(
-            f"La columna de texto '{text_col}' no está en el CSV. "
-            f"Columnas disponibles: {list(df.columns)}"
-        )
+        raise ValueError(f"Column '{text_col}' not found. Available: {list(df.columns)}")
 
-    # Eliminamos filas con texto vacío por seguridad (debería haber 0)
+    # There should be no NaN here after preprocessing, but just in case
     df = df.dropna(subset=[text_col])
     df[text_col] = df[text_col].astype(str).str.strip()
     df = df[df[text_col] != ""].copy()
-
     df = df.reset_index(drop=True)
-    print(f"Número de comentarios cargados: {len(df)}")
+
+    print(f"Comments loaded: {len(df)}")
     return df
 
 
 def cargar_modelo(model_name: str) -> SentenceTransformer:
     """
-    Carga el modelo de sentence-transformers.
-    Si es la primera vez, lo descargará de internet.
+    Loads the sentence-transformers model.
+    First run will download it from HuggingFace.
     """
-    print(f"Cargando modelo de embeddings: {model_name}")
+    print(f"Loading model: {model_name}")
     model = SentenceTransformer(model_name)
-    print("Modelo cargado correctamente.")
+    print("Model loaded.")
     return model
 
 
 def generar_embeddings(model: SentenceTransformer, textos: list) -> np.ndarray:
     """
-    Genera embeddings para una lista de textos.
-    Devuelve una matriz NumPy de shape (n_textos, dim_embedding).
+    Encodes the text list into a normalized embedding matrix.
+    I normalize to unit norm so cosine similarity reduces to dot product.
     """
-    print(f"Generando embeddings para {len(textos)} textos...")
+    print(f"Generating embeddings for {len(textos)} texts...")
     embeddings = model.encode(
         textos,
-        batch_size=64,           # puedes ajustar el tamaño de batch si quieres
-        show_progress_bar=True,  # barra de progreso
+        batch_size=64,
+        show_progress_bar=True,
         convert_to_numpy=True,
-        normalize_embeddings=True  # normaliza a norma 1 (útil para similitud coseno)
+        normalize_embeddings=True
     )
-    print("Embeddings generados.")
-    print(f"Shape de la matriz de embeddings: {embeddings.shape}")
+    print(f"Embedding matrix shape: {embeddings.shape}")
     return embeddings
 
 
 def guardar_resultados(df: pd.DataFrame, embeddings: np.ndarray,
                        path_embeddings: str, path_index: str):
     """
-    Guarda:
-    - la matriz de embeddings en .npy
-    - un CSV con índice y metadatos para saber qué comentario corresponde a cada fila.
+    Saves:
+    - the embedding matrix as .npy
+    - a metadata CSV with one row per embedding (aligned by index)
     """
-    print(f"Guardando matriz de embeddings en: {path_embeddings}")
+    print(f"Saving embeddings to: {path_embeddings}")
     np.save(path_embeddings, embeddings)
 
-    # Creamos un DataFrame índice con metadatos útiles
-    # (puedes añadir/quitar columnas según te interese)
+    # Metadata columns I want to keep alongside the embeddings
     columnas_index = [
         "video_id",
         "comment_id",
@@ -105,35 +95,21 @@ def guardar_resultados(df: pd.DataFrame, embeddings: np.ndarray,
     ]
 
     columnas_presentes = [c for c in columnas_index if c in df.columns]
-
     df_index = df[columnas_presentes].copy()
     df_index.insert(0, "embedding_idx", range(len(df_index)))
 
-    print(f"Guardando índice de comentarios en: {path_index}")
+    print(f"Saving index to: {path_index}")
     df_index.to_csv(path_index, sep=";", encoding="utf-8", index=False)
 
-    print("Resultados guardados correctamente.")
-    print(f"- embeddings.npy -> shape {embeddings.shape}")
-    print(f"- comentarios_index.csv -> {len(df_index)} filas")
+    print(f"Done. embeddings.npy -> {embeddings.shape}, index -> {len(df_index)} rows")
 
 
 def main():
-    # 1. Cargar comentarios preprocesados
     df = cargar_corpus(INPUT_FILE, TEXT_COLUMN)
-
-    # 2. Cargar modelo de embeddings
     model = cargar_modelo(MODEL_NAME)
-
-    # 3. Generar embeddings a partir de la columna de texto limpia
     textos = df[TEXT_COLUMN].tolist()
     embeddings = generar_embeddings(model, textos)
-
-    # 4. Guardar resultados (matriz + índice)
     guardar_resultados(df, embeddings, OUTPUT_EMBEDDINGS, OUTPUT_INDEX)
-
-    print("\n--- Proceso completado ---")
-    print(f"Embeddings disponibles en: {OUTPUT_EMBEDDINGS}")
-    print(f"Índice de comentarios en: {OUTPUT_INDEX}")
 
 
 if __name__ == "__main__":
