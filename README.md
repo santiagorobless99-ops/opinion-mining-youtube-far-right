@@ -75,11 +75,9 @@ Before running the scraper, configure `VIDEO_IDS` in `1-scrapping_Youtube_coment
 - Language detection (`langdetect`) is probabilistic; short comments may be misclassified.
 - The keyword list in `3.1-analisis_coocurrencias.py` is theoretically motivated and can be reconfigured.
 
-## Related
 
-See the [`TWITTER/`](TWITTER/) folder for the equivalent pipeline applied to X (Twitter).
+## Authors
 
-## Author
-
-Santiago Robles — PhD Candidate, Sociology, Universitat de València  
+Santiago Robles — PhD Candidate, Social Sciences, Universitat de València  
+Ignacio Lezica Cabrera — PhD, Social Sciences, Universitat de València 
 Contact: santiagorobless99@gmail.com
